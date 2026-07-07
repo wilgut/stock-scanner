@@ -72,7 +72,13 @@
   table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
   th, td { padding: 8px 10px; text-align: right; white-space: nowrap; }
   th { background: var(--panel); color: var(--muted); font-weight: 600; font-size: 0.75rem;
-       text-transform: uppercase; position: sticky; top: 0; }
+       text-transform: uppercase; position: sticky; top: 0; cursor: pointer; user-select: none; }
+  th:hover { color: var(--text); }
+  th.activo { color: var(--accent); }
+  .flujo { font-weight: 700; }
+  .flujo-alto { color: var(--green); }
+  .flujo-medio { color: var(--gold); }
+  .flujo-bajo { color: var(--red); }
   td:first-child, th:first-child, td:nth-child(2), th:nth-child(2) { text-align: left; }
   tr { border-top: 1px solid var(--border); }
   tr:hover td { background: rgba(47, 129, 247, 0.07); }
@@ -178,45 +184,109 @@ async function ejecutar(scanId, multiTf) {
   }
 }
 
-function mostrar(data) {
+// Estado de la tabla de resultados (para ordenar por cualquier columna)
+let vista = { filas: [], titulo: '', total: 0, etiquetas: {}, sortKey: 'prob_flujo', sortDir: -1 };
+
+const COLUMNAS = [
+  { key: 'ticker', label: 'Ticker', num: false },
+  { key: 'description', label: 'Nombre', num: false, opt: true },
+  { key: 'prob_flujo', label: 'Flujo Inst.', num: true },
+  { key: 'close', label: 'Precio', num: true },
+  { key: 'change', label: 'Cambio', num: true },
+  { key: 'volume', label: 'Volumen', num: true },
+  { key: 'relative_volume_10d_calc', label: 'Vol. Rel.', num: true, opt: true },
+  { key: 'rsi_fast', label: 'RSI', num: true },
+  { key: 'rsi_slow', label: 'RSI', num: true },
+  { key: 'market_cap_basic', label: 'Cap.', num: true, opt: true },
+  { key: 'sector', label: 'Sector', num: false, opt: true },
+];
+
+function celda(colDef, r) {
+  const opt = colDef.opt ? ' class="col-opcional"' : '';
+  switch (colDef.key) {
+    case 'ticker': {
+      const sym = r.ticker.split(':')[1] || r.ticker;
+      const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
+      return `<td><a class="ticker" href="${url}" target="_blank">${sym}</a></td>`;
+    }
+    case 'description':
+      return `<td class="nombre-col col-opcional">${r.description || ''}</td>`;
+    case 'prob_flujo': {
+      if (r.prob_flujo == null) return '<td>—</td>';
+      const cls = r.prob_flujo >= 67 ? 'flujo-alto' : (r.prob_flujo >= 34 ? 'flujo-medio' : 'flujo-bajo');
+      return `<td class="flujo ${cls}" title="Sector: ${r.sector || '—'} · Industria: ${r.industry || '—'}">${r.prob_flujo}%</td>`;
+    }
+    case 'close': return `<td>$${fmtNum(r.close, 2)}</td>`;
+    case 'change': {
+      const chg = r.change == null ? 0 : r.change;
+      return `<td class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${fmtNum(r.change, 2)}%</td>`;
+    }
+    case 'volume': return `<td>${fmtVol(r.volume)}</td>`;
+    case 'relative_volume_10d_calc': return `<td${opt}>${fmtNum(r.relative_volume_10d_calc, 1)}x</td>`;
+    case 'rsi_fast': return `<td>${fmtNum(r.rsi_fast, 0)}</td>`;
+    case 'rsi_slow': return `<td>${fmtNum(r.rsi_slow, 0)}</td>`;
+    case 'market_cap_basic': return `<td${opt}>${fmtVol(r.market_cap_basic)}</td>`;
+    case 'sector': return `<td${opt} title="${r.industry || ''}">${r.sector || '—'}</td>`;
+  }
+}
+
+function ordenar(key, num) {
+  if (vista.sortKey === key) {
+    vista.sortDir = -vista.sortDir;
+  } else {
+    vista.sortKey = key;
+    vista.sortDir = num ? -1 : 1; // numéricas: de mayor a menor primero
+  }
+  render(false);
+}
+
+function render(scroll) {
   const cont = document.getElementById('resultados');
-  if (!data.resultados.length) {
-    cont.innerHTML = `<h2>${data.scan}</h2>
+  if (!vista.filas.length) {
+    cont.innerHTML = `<h2>${vista.titulo}</h2>
       <div class="info">Sin coincidencias hoy. Los scans de cruce exacto son poco
       frecuentes: prueba de nuevo otro día o relaja los filtros.</div>`;
-    cont.scrollIntoView({ behavior: 'smooth' });
+    if (scroll) cont.scrollIntoView({ behavior: 'smooth' });
     return;
   }
-  const filas = data.resultados.map(r => {
-    const [exch, sym] = r.ticker.split(':');
-    const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
-    const chg = r.change == null ? 0 : r.change;
-    return `<tr>
-      <td><a class="ticker" href="${url}" target="_blank">${sym}</a></td>
-      <td class="nombre-col col-opcional">${r.description || ''}</td>
-      <td>$${fmtNum(r.close, 2)}</td>
-      <td class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${fmtNum(r.change, 2)}%</td>
-      <td>${fmtVol(r.volume)}</td>
-      <td class="col-opcional">${fmtNum(r.relative_volume_10d_calc, 1)}x</td>
-      <td>${fmtNum(r.rsi_fast, 0)}</td>
-      <td>${fmtNum(r.rsi_slow, 0)}</td>
-      <td class="col-opcional">${fmtVol(r.market_cap_basic)}</td>
-      <td class="col-opcional">${r.sector || '—'}</td>
-    </tr>`;
+  const { sortKey, sortDir } = vista;
+  const numerica = (COLUMNAS.find(c => c.key === sortKey) || {}).num;
+  const filas = [...vista.filas].sort((a, b) => {
+    const va = a[sortKey], vb = b[sortKey];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;   // nulos siempre al final
+    if (vb == null) return -1;
+    const cmp = numerica ? (Number(va) - Number(vb)) : String(va).localeCompare(String(vb));
+    return cmp * sortDir;
+  });
+
+  const ths = COLUMNAS.map(c => {
+    const label = c.key === 'rsi_fast' ? vista.etiquetas.rsi_fast
+                : c.key === 'rsi_slow' ? vista.etiquetas.rsi_slow : c.label;
+    const flecha = sortKey === c.key ? (sortDir === -1 ? ' ▼' : ' ▲') : '';
+    const cls = [c.opt ? 'col-opcional' : '', sortKey === c.key ? 'activo' : ''].join(' ').trim();
+    return `<th class="${cls}" onclick="ordenar('${c.key}', ${!!c.num})">${label}${flecha}</th>`;
   }).join('');
-  cont.innerHTML = `<h2>${data.scan}</h2>
-    <div class="info">${data.total} coincidencias en total · mostrando ${data.resultados.length}
-    · pulsa un ticker para abrir su gráfico en TradingView</div>
+
+  const cuerpo = filas.map(r => `<tr>${COLUMNAS.map(c => celda(c, r)).join('')}</tr>`).join('');
+
+  cont.innerHTML = `<h2>${vista.titulo}</h2>
+    <div class="info">${vista.total} coincidencias en total · mostrando ${filas.length}
+    · ordenado por flujo institucional del sector/industria · pulsa cualquier
+    encabezado para reordenar · pulsa un ticker para abrir su gráfico en TradingView</div>
     <div class="tabla-wrap"><table>
-      <thead><tr>
-        <th>Ticker</th><th class="col-opcional">Nombre</th><th>Precio</th><th>Cambio</th>
-        <th>Volumen</th><th class="col-opcional">Vol. Rel.</th>
-        <th>${data.etiquetas.rsi_fast}</th><th>${data.etiquetas.rsi_slow}</th>
-        <th class="col-opcional">Cap.</th><th class="col-opcional">Sector</th>
-      </tr></thead>
-      <tbody>${filas}</tbody>
+      <thead><tr>${ths}</tr></thead>
+      <tbody>${cuerpo}</tbody>
     </table></div>`;
-  cont.scrollIntoView({ behavior: 'smooth' });
+  if (scroll) cont.scrollIntoView({ behavior: 'smooth' });
+}
+
+function mostrar(data) {
+  vista = {
+    filas: data.resultados, titulo: data.scan, total: data.total,
+    etiquetas: data.etiquetas, sortKey: 'prob_flujo', sortDir: -1,
+  };
+  render(true);
 }
 </script>
 </body>

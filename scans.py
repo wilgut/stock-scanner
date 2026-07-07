@@ -11,7 +11,9 @@ Los scans con 'multi_tf': True aceptan un par de temporalidades
 (rápida-lenta): la señal se busca en la rápida y la confirmación en la lenta.
 """
 import os
+import time
 
+import pandas as pd
 from tradingview_screener import Query, col
 
 EXCHANGES = ['NASDAQ', 'NYSE', 'AMEX']
@@ -30,7 +32,7 @@ TF_DEFAULT = '1D-1W'
 
 COLUMNS_BASE = [
     'name', 'description', 'close', 'change', 'volume',
-    'relative_volume_10d_calc', 'market_cap_basic', 'sector',
+    'relative_volume_10d_calc', 'market_cap_basic', 'sector', 'industry',
 ]
 
 SCANS = {
@@ -207,6 +209,60 @@ def _cookies():
     return {'sessionid': sid} if sid else None
 
 
+# ---------------- Flujo de capital institucional por sector/industria ----------------
+# Aproximación: Money Flow Index (14) ponderado por volumen en dólares
+# (Value.Traded) + momentum de 1 mes, agregado por sector e industria y
+# convertido a percentil 0-100. Los grupos donde entra más dinero con más
+# presión compradora puntúan más alto. Caché de 15 minutos.
+
+_FLUJO_TTL = 15 * 60
+_flujo_cache = {'ts': 0.0, 'sector': {}, 'industria': {}}
+
+
+def _percentiles_grupo(df, grupo):
+    agg = df.groupby(grupo).apply(
+        lambda g: (
+            (g['MoneyFlow'] * g['w']).sum() / g['w'].sum(),
+            (g['Perf.1M'] * g['w']).sum() / g['w'].sum(),
+        ),
+        include_groups=False,
+    )
+    tabla = pd.DataFrame(agg.tolist(), index=agg.index, columns=['mfi', 'mom'])
+    compuesto = tabla['mfi'].rank(pct=True) * 0.6 + tabla['mom'].rank(pct=True) * 0.4
+    return (compuesto.rank(pct=True) * 100).round(0).to_dict()
+
+
+def flujo_grupos():
+    """Percentil de flujo institucional por sector y por industria (0-100)."""
+    ahora = time.time()
+    if ahora - _flujo_cache['ts'] < _FLUJO_TTL and _flujo_cache['sector']:
+        return _flujo_cache['sector'], _flujo_cache['industria']
+
+    q = (
+        Query()
+        .set_markets('america')
+        .select('sector', 'industry', 'MoneyFlow', 'Value.Traded', 'Perf.1M')
+        .where(
+            col('type') == 'stock',
+            col('typespecs').has('common'),
+            col('exchange').isin(EXCHANGES),
+            col('close') > 3,
+            col('volume') > 200_000,
+        )
+        .order_by('Value.Traded', ascending=False)
+        .limit(3000)
+    )
+    _, df = q.get_scanner_data(cookies=_cookies())
+    df = df.dropna(subset=['MoneyFlow', 'Value.Traded', 'sector', 'industry'])
+    df['Perf.1M'] = df['Perf.1M'].fillna(0)
+    df['w'] = df['Value.Traded'].clip(lower=1)
+
+    _flujo_cache['sector'] = _percentiles_grupo(df, 'sector')
+    _flujo_cache['industria'] = _percentiles_grupo(df, 'industry')
+    _flujo_cache['ts'] = ahora
+    return _flujo_cache['sector'], _flujo_cache['industria']
+
+
 def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
              tf=TF_DEFAULT, limit=60):
     """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
@@ -243,6 +299,20 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
     )
     count, df = q.get_scanner_data(cookies=_cookies())
     df = df.rename(columns={rsi_fast: 'rsi_fast', rsi_slow: 'rsi_slow'})
+
+    # Probabilidad de flujo institucional: 40% percentil del sector +
+    # 60% percentil de la industria (más específica). Si la consulta de
+    # flujo falla, los resultados salen igualmente sin score.
+    try:
+        sec_p, ind_p = flujo_grupos()
+        df['prob_flujo'] = [
+            round(0.4 * sec_p.get(s, 50) + 0.6 * ind_p.get(i, 50))
+            for s, i in zip(df['sector'], df['industry'])
+        ]
+        df = df.sort_values('prob_flujo', ascending=False)
+    except Exception:
+        df['prob_flujo'] = None
+
     df = df.astype(object).where(df.notna(), None)
     etiquetas = {'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}'}
     return count, df.to_dict(orient='records'), etiquetas
