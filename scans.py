@@ -6,6 +6,9 @@ que usa la página tradingview.com/screener) a través de la librería
 tradingview-screener. No requiere login; si se define la variable de entorno
 TV_SESSIONID (cookie sessionid de una cuenta Premium) los datos se obtienen
 en tiempo real en lugar de con retraso de 15 minutos.
+
+Los scans con 'multi_tf': True aceptan un par de temporalidades
+(rápida-lenta): la señal se busca en la rápida y la confirmación en la lenta.
 """
 import os
 
@@ -13,49 +16,77 @@ from tradingview_screener import Query, col
 
 EXCHANGES = ['NASDAQ', 'NYSE', 'AMEX']
 
-# Columnas que se devuelven en todos los scans
-COLUMNS = [
+# Pares de temporalidad: clave -> (sufijo rápido, sufijo lento, etiqueta rápida, etiqueta lenta)
+# Sufijo vacío = diario (el marco por defecto del screener).
+TF_PAIRS = {
+    '15-60':  ('|15',  '|60',  '15m', '1H'),
+    '60-240': ('|60',  '|240', '1H',  '4H'),
+    '60-1D':  ('|60',  '',     '1H',  'D'),
+    '240-1D': ('|240', '',     '4H',  'D'),
+    '1D-1W':  ('',     '|1W',  'D',   'S'),
+    '1W-1M':  ('|1W',  '|1M',  'S',   'M'),
+}
+TF_DEFAULT = '1D-1W'
+
+COLUMNS_BASE = [
     'name', 'description', 'close', 'change', 'volume',
     'relative_volume_10d_calc', 'market_cap_basic', 'sector',
-    'RSI', 'RSI|1W', 'Perf.3M', 'Perf.Y',
 ]
 
 SCANS = {
     # ------------------------- MIS SCANS -------------------------
     'macd_doble': {
-        'nombre': 'MACD Doble: Diario + Semanal',
+        'nombre': 'MACD Doble: señal + confirmación',
         'categoria': 'Mis Scans',
-        'descripcion': 'La línea MACD diaria cruza HOY por encima de su señal, '
-                       'y la MACD semanal ya está en tendencia positiva (por '
-                       'encima de su señal). Confirma el giro diario con el '
-                       'marco semanal.',
-        'condiciones': lambda: [
-            col('MACD.macd').crosses_above(col('MACD.signal')),
-            col('MACD.macd|1W') > col('MACD.signal|1W'),
+        'multi_tf': True,
+        'descripcion': 'La línea MACD del marco rápido cruza AHORA por encima '
+                       'de su señal, y la MACD del marco lento ya está en '
+                       'tendencia positiva. Ej. Diario + Semanal: giro diario '
+                       'confirmado por el semanal.',
+        'condiciones': lambda f, s: [
+            col(f'MACD.macd{f}').crosses_above(col(f'MACD.signal{f}')),
+            col(f'MACD.macd{s}') > col(f'MACD.signal{s}'),
         ],
         'orden': 'volume',
     },
     'macd_doble_estricto': {
         'nombre': 'MACD Doble Estricto (cruce simultáneo)',
         'categoria': 'Mis Scans',
-        'descripcion': 'La MACD diaria Y la semanal cruzan a positivo en la '
-                       'misma sesión/semana. Señal muy poco frecuente pero muy '
+        'multi_tf': True,
+        'descripcion': 'La MACD del marco rápido Y la del lento cruzan a '
+                       'positivo a la vez. Señal muy poco frecuente pero muy '
                        'potente: puede dar 0 resultados muchos días.',
-        'condiciones': lambda: [
-            col('MACD.macd').crosses_above(col('MACD.signal')),
-            col('MACD.macd|1W').crosses_above(col('MACD.signal|1W')),
+        'condiciones': lambda f, s: [
+            col(f'MACD.macd{f}').crosses_above(col(f'MACD.signal{f}')),
+            col(f'MACD.macd{s}').crosses_above(col(f'MACD.signal{s}')),
         ],
         'orden': 'volume',
     },
     'rsi_doble': {
-        'nombre': 'RSI Doble: Diario + Semanal',
+        'nombre': 'RSI Doble: cruce de 50',
         'categoria': 'Mis Scans',
-        'descripcion': 'El RSI diario cruza HOY por encima de 50 (giro a '
-                       'tendencia positiva) y el RSI semanal ya está por encima '
-                       'de 50. Momentum alcista en ambos marcos temporales.',
-        'condiciones': lambda: [
-            col('RSI').crosses_above(50),
-            col('RSI|1W') > 50,
+        'multi_tf': True,
+        'descripcion': 'El RSI del marco rápido cruza AHORA por encima de 50 '
+                       '(zona alcista) y el RSI del marco lento ya está por '
+                       'encima de 50. Momentum positivo en ambos marcos.',
+        'condiciones': lambda f, s: [
+            col(f'RSI{f}').crosses_above(50),
+            col(f'RSI{s}') > 50,
+        ],
+        'orden': 'volume',
+    },
+    'rsi_giro': {
+        'nombre': 'RSI Giro Alcista (cualquier nivel)',
+        'categoria': 'Mis Scans',
+        'multi_tf': True,
+        'descripcion': 'El RSI gira a tendencia positiva aunque esté por '
+                       'debajo de 50: el RSI rápido de 7 periodos cruza por '
+                       'encima del RSI de 14 en el marco rápido, y en el marco '
+                       'lento ya giró. Detecta el cambio de momentum antes que '
+                       'el cruce de 50.',
+        'condiciones': lambda f, s: [
+            col(f'RSI7{f}').crosses_above(col(f'RSI{f}')),
+            col(f'RSI7{s}') > col(f'RSI{s}'),
         ],
         'orden': 'volume',
     },
@@ -176,13 +207,24 @@ def _cookies():
     return {'sessionid': sid} if sid else None
 
 
-def run_scan(scan_id, min_price=5.0, min_volume=500_000, limit=60):
-    """Ejecuta un scan y devuelve (total, lista de dicts)."""
+def run_scan(scan_id, min_price=5.0, min_volume=500_000, tf=TF_DEFAULT, limit=60):
+    """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
     scan = SCANS[scan_id]
+
+    if scan.get('multi_tf'):
+        if tf not in TF_PAIRS:
+            tf = TF_DEFAULT
+        fast, slow, lbl_fast, lbl_slow = TF_PAIRS[tf]
+        condiciones = scan['condiciones'](fast, slow)
+    else:
+        fast, slow, lbl_fast, lbl_slow = TF_PAIRS[TF_DEFAULT]
+        condiciones = scan['condiciones']()
+
+    rsi_fast, rsi_slow = f'RSI{fast}', f'RSI{slow}'
     q = (
         Query()
         .set_markets('america')
-        .select(*COLUMNS)
+        .select(*COLUMNS_BASE, rsi_fast, rsi_slow)
         .where(
             col('type') == 'stock',
             col('typespecs').has('common'),
@@ -190,11 +232,13 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, limit=60):
             col('exchange').isin(EXCHANGES),
             col('close') > min_price,
             col('volume') > min_volume,
-            *scan['condiciones'](),
+            *condiciones,
         )
         .order_by(scan['orden'], ascending=False)
         .limit(limit)
     )
     count, df = q.get_scanner_data(cookies=_cookies())
+    df = df.rename(columns={rsi_fast: 'rsi_fast', rsi_slow: 'rsi_slow'})
     df = df.astype(object).where(df.notna(), None)
-    return count, df.to_dict(orient='records')
+    etiquetas = {'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}'}
+    return count, df.to_dict(orient='records'), etiquetas

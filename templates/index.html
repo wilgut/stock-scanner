@@ -38,6 +38,13 @@
   }
   h2.categoria.inst { color: var(--accent); }
 
+  .tf-selector { margin: 0 0 12px; }
+  .tf-selector label { font-size: 0.75rem; color: var(--muted); display: block; margin-bottom: 4px; }
+  .tf-selector select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; min-width: 220px;
+  }
+
   .scans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
   .scan-card {
     background: var(--panel); border: 1px solid var(--border);
@@ -99,13 +106,24 @@
 
 {% for categoria, lista in categorias.items() %}
   <h2 class="categoria {{ 'inst' if categoria != 'Mis Scans' else '' }}">{{ categoria }}</h2>
+  {% if categoria == 'Mis Scans' %}
+  <div class="tf-selector">
+    <label for="tf">Temporalidad (señal rápida + confirmación lenta)</label>
+    <select id="tf">
+      {% for valor, etiqueta in tf_opciones.items() %}
+      <option value="{{ valor }}" {{ 'selected' if valor == tf_default else '' }}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
   <div class="scans">
     {% for scan_id, scan in lista %}
     <div class="scan-card">
       <h3>{{ scan.nombre }}</h3>
       <p>{{ scan.descripcion }}</p>
       <div class="badge" id="badge-{{ scan_id }}"></div>
-      <button onclick="ejecutar('{{ scan_id }}')" id="btn-{{ scan_id }}">Ejecutar scan</button>
+      <button onclick="ejecutar('{{ scan_id }}', {{ 'true' if scan.multi_tf else 'false' }})"
+              id="btn-{{ scan_id }}">Ejecutar scan</button>
     </div>
     {% endfor %}
   </div>
@@ -123,7 +141,7 @@ function fmtVol(v) {
 }
 function fmtNum(v, d) { return v == null ? '—' : Number(v).toFixed(d); }
 
-async function ejecutar(scanId) {
+async function ejecutar(scanId, multiTf) {
   const btn = document.getElementById('btn-' + scanId);
   const badge = document.getElementById('badge-' + scanId);
   btn.disabled = true; btn.textContent = 'Escaneando…';
@@ -132,6 +150,7 @@ async function ejecutar(scanId) {
     min_price: document.getElementById('min_price').value || 0,
     min_volume: document.getElementById('min_volume').value || 0,
   });
+  if (multiTf) p.set('tf', document.getElementById('tf').value);
   try {
     const r = await fetch(`/api/scan/${scanId}?` + p);
     const data = await r.json();
@@ -167,8 +186,8 @@ function mostrar(data) {
       <td class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${fmtNum(r.change, 2)}%</td>
       <td>${fmtVol(r.volume)}</td>
       <td class="col-opcional">${fmtNum(r.relative_volume_10d_calc, 1)}x</td>
-      <td>${fmtNum(r.RSI, 0)}</td>
-      <td>${fmtNum(r['RSI|1W'], 0)}</td>
+      <td>${fmtNum(r.rsi_fast, 0)}</td>
+      <td>${fmtNum(r.rsi_slow, 0)}</td>
       <td class="col-opcional">${fmtVol(r.market_cap_basic)}</td>
       <td class="col-opcional">${r.sector || '—'}</td>
     </tr>`;
@@ -179,7 +198,8 @@ function mostrar(data) {
     <div class="tabla-wrap"><table>
       <thead><tr>
         <th>Ticker</th><th class="col-opcional">Nombre</th><th>Precio</th><th>Cambio</th>
-        <th>Volumen</th><th class="col-opcional">Vol. Rel.</th><th>RSI D</th><th>RSI S</th>
+        <th>Volumen</th><th class="col-opcional">Vol. Rel.</th>
+        <th>${data.etiquetas.rsi_fast}</th><th>${data.etiquetas.rsi_slow}</th>
         <th class="col-opcional">Cap.</th><th class="col-opcional">Sector</th>
       </tr></thead>
       <tbody>${filas}</tbody>

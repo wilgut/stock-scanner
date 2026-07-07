@@ -3,9 +3,19 @@ import traceback
 
 from flask import Flask, jsonify, render_template, request
 
-from scans import SCANS, run_scan
+from scans import SCANS, TF_DEFAULT, TF_PAIRS, run_scan
 
 app = Flask(__name__)
+
+
+TF_OPCIONES = {
+    '15-60': '15 min + 1 hora',
+    '60-240': '1 hora + 4 horas',
+    '60-1D': '1 hora + Diario',
+    '240-1D': '4 horas + Diario',
+    '1D-1W': 'Diario + Semanal',
+    '1W-1M': 'Semanal + Mensual',
+}
 
 
 @app.route('/')
@@ -13,7 +23,8 @@ def index():
     categorias = {}
     for scan_id, scan in SCANS.items():
         categorias.setdefault(scan['categoria'], []).append((scan_id, scan))
-    return render_template('index.html', categorias=categorias)
+    return render_template('index.html', categorias=categorias,
+                           tf_opciones=TF_OPCIONES, tf_default=TF_DEFAULT)
 
 
 @app.route('/api/scan/<scan_id>')
@@ -25,8 +36,9 @@ def api_scan(scan_id):
         min_volume = int(request.args.get('min_volume', 500_000))
     except ValueError:
         return jsonify({'error': 'Filtros inválidos'}), 400
+    tf = request.args.get('tf', TF_DEFAULT)
     try:
-        total, filas = run_scan(scan_id, min_price, min_volume)
+        total, filas, etiquetas = run_scan(scan_id, min_price, min_volume, tf)
     except Exception:
         traceback.print_exc()
         return jsonify({'error': 'Error consultando TradingView. '
@@ -35,6 +47,7 @@ def api_scan(scan_id):
         'scan': SCANS[scan_id]['nombre'],
         'total': total,
         'resultados': filas,
+        'etiquetas': etiquetas,
     })
 
 
