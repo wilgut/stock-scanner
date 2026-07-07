@@ -34,11 +34,13 @@ def api_scan(scan_id):
     try:
         min_price = float(request.args.get('min_price', 5))
         min_volume = int(request.args.get('min_volume', 500_000))
+        min_mcap = float(request.args.get('min_mcap', 0))
     except ValueError:
         return jsonify({'error': 'Filtros inválidos'}), 400
     tf = request.args.get('tf', TF_DEFAULT)
     try:
-        total, filas, etiquetas = run_scan(scan_id, min_price, min_volume, tf)
+        total, filas, etiquetas = run_scan(scan_id, min_price, min_volume,
+                                           min_mcap, tf)
     except Exception:
         traceback.print_exc()
         return jsonify({'error': 'Error consultando TradingView. '

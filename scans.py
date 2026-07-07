@@ -207,7 +207,8 @@ def _cookies():
     return {'sessionid': sid} if sid else None
 
 
-def run_scan(scan_id, min_price=5.0, min_volume=500_000, tf=TF_DEFAULT, limit=60):
+def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
+             tf=TF_DEFAULT, limit=60):
     """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
     scan = SCANS[scan_id]
 
@@ -219,6 +220,9 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, tf=TF_DEFAULT, limit=60
     else:
         fast, slow, lbl_fast, lbl_slow = TF_PAIRS[TF_DEFAULT]
         condiciones = scan['condiciones']()
+
+    if min_mcap > 0:
+        condiciones = [col('market_cap_basic') > min_mcap, *condiciones]
 
     rsi_fast, rsi_slow = f'RSI{fast}', f'RSI{slow}'
     q = (
