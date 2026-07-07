@@ -1,0 +1,27 @@
+# Scanner de Acciones
+
+Web app de scans de stock picking con datos del screener de TradingView
+(NYSE, NASDAQ, AMEX). Incluye scans propios de doble marco temporal
+(MACD y RSI diario + semanal) y scans institucionales clásicos
+(Minervini, CANSLIM, Golden Cross, ruptura de 52 semanas, volumen inusual,
+gap alcista, rebote sobrevendido, pullback a la SMA 50).
+
+## Ejecutar en esta PC
+
+Doble clic en `Iniciar Scanner.bat`, o en una terminal:
+
+```
+python app.py
+```
+
+Luego abrir http://localhost:8877
+
+## Publicar en internet
+
+Ver [DESPLIEGUE.md](DESPLIEGUE.md) — guía paso a paso para Render.com (gratis).
+
+## Datos
+
+- Fuente: API pública del screener de TradingView (librería `tradingview-screener`).
+- Sin configurar nada: datos con ~15 min de retraso.
+- Con la variable de entorno `TV_SESSIONID` (cookie de cuenta Premium): tiempo real.

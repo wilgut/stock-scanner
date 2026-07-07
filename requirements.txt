@@ -1,0 +1,4 @@
+flask>=3.0
+tradingview-screener>=3.2
+waitress>=3.0
+gunicorn>=22.0
