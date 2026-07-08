@@ -12,6 +12,7 @@ Los scans con 'multi_tf': True aceptan un par de temporalidades
 """
 import os
 import time
+import traceback
 
 import pandas as pd
 from tradingview_screener import Query, col
@@ -209,6 +210,19 @@ def _cookies():
     return {'sessionid': sid} if sid else None
 
 
+def _get_data(q):
+    """Consulta con la sesión Premium si existe; si TradingView la rechaza
+    (p. ej. bloquea IPs de datacenter), reintenta sin sesión (datos con
+    ~15 min de retraso) para que la app nunca deje de funcionar."""
+    ck = _cookies()
+    if ck:
+        try:
+            return q.get_scanner_data(cookies=ck)
+        except Exception:
+            traceback.print_exc()
+    return q.get_scanner_data()
+
+
 # ---------------- Flujo de capital institucional por sector/industria ----------------
 # Aproximación: Money Flow Index (14) ponderado por volumen en dólares
 # (Value.Traded) + momentum de 1 mes, agregado por sector e industria y
@@ -252,7 +266,7 @@ def flujo_grupos():
         .order_by('Value.Traded', ascending=False)
         .limit(3000)
     )
-    _, df = q.get_scanner_data(cookies=_cookies())
+    _, df = _get_data(q)
     df = df.dropna(subset=['MoneyFlow', 'Value.Traded', 'sector', 'industry'])
     df['Perf.1M'] = df['Perf.1M'].fillna(0)
     df['w'] = df['Value.Traded'].clip(lower=1)
@@ -297,7 +311,7 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
         .order_by(scan['orden'], ascending=False)
         .limit(limit)
     )
-    count, df = q.get_scanner_data(cookies=_cookies())
+    count, df = _get_data(q)
     df = df.rename(columns={rsi_fast: 'rsi_fast', rsi_slow: 'rsi_slow'})
 
     # Probabilidad de flujo institucional: 40% percentil del sector +
