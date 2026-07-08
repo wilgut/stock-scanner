@@ -1,61 +1,75 @@
-# Cómo publicar el Scanner en internet (gratis)
+# Cómo publicar el Scanner en internet
 
-El objetivo: que la app tenga una dirección web propia (ej. `https://scanner-acciones.onrender.com`)
-para abrirla desde tu PC, tu MacBook o tu iPhone sin encender nada.
+El objetivo: que la app tenga una dirección web propia para abrirla desde tu
+PC, tu MacBook o tu iPhone sin encender nada.
 
-Usaremos **Render.com** (plan gratuito). Solo se hace una vez, toma unos 15 minutos.
+Ya tienes cuentas en GitHub, Vercel y Railway. La app está preparada para las
+tres cosas: solo hay que subir el código a GitHub (una vez) y conectarlo.
 
-## Paso 1 — Crear cuenta en GitHub (si no tienes)
+**Recomendación: usa Vercel.** Es gratis de verdad y la app nunca "se duerme".
+Railway funciona igual de bien, pero tras el crédito de prueba de $5 pasa a
+costar ~$5/mes.
 
-1. Entra a https://github.com y pulsa **Sign up**.
-2. Usa tu correo y crea una contraseña. Es gratis.
+## Paso 1 — Subir el código a GitHub (solo la primera vez)
 
-## Paso 2 — Subir el código a GitHub
-
-1. Ya dentro de GitHub, pulsa el botón verde **New** (nuevo repositorio).
-2. Nombre: `stock-scanner`. Déjalo en **Public**. Pulsa **Create repository**.
+1. Entra a https://github.com y pulsa el botón verde **New** (nuevo repositorio).
+2. Nombre: `stock-scanner`. Déjalo en **Public** (o Private, ambos funcionan).
+   Pulsa **Create repository**.
 3. En la página que aparece, pulsa el enlace **uploading an existing file**.
 4. Abre la carpeta `C:\Users\Wilfred\Trading Claude\stock-scanner` en el
    Explorador de Windows y arrastra TODO su contenido (incluida la carpeta
    `templates`) a la ventana de GitHub.
 5. Pulsa el botón verde **Commit changes**.
 
-## Paso 3 — Crear el servicio en Render
+> Cuando hagamos mejoras a la app, repite los pasos 3-5 para actualizar los
+> archivos: Vercel/Railway republican solos en 1-2 minutos.
 
-1. Entra a https://render.com y pulsa **Get Started** → **Sign in with GitHub**
-   (así conecta con tu cuenta de GitHub automáticamente).
-2. Pulsa **New +** → **Blueprint**.
-3. Elige el repositorio `stock-scanner` y pulsa **Connect**.
-4. Render lee el archivo `render.yaml` y configura todo solo. Pulsa **Apply**.
-5. Espera 3-5 minutos. Al terminar verás la dirección web, algo como:
-   `https://scanner-acciones.onrender.com`
+## Paso 2 — Publicar en Vercel (recomendado, gratis)
 
-## Paso 4 — Guardar el acceso en tus dispositivos
+1. Entra a https://vercel.com con tu cuenta.
+2. Pulsa **Add New…** → **Project**.
+3. En la lista de repositorios de GitHub, busca `stock-scanner` y pulsa
+   **Import**. (Si no aparece, pulsa "Adjust GitHub App Permissions" y dale
+   acceso al repositorio.)
+4. No cambies nada y pulsa **Deploy**. Vercel detecta Flask automáticamente.
+5. En 1-2 minutos verás tu dirección, algo como:
+   `https://stock-scanner-xxxx.vercel.app`
+
+Nota: si la app lleva un rato sin usarse, la primera consulta puede tardar
+5-10 segundos (arranque en frío). Las siguientes van rápidas.
+
+## Alternativa — Publicar en Railway
+
+1. Entra a https://railway.app con tu cuenta.
+2. **New Project** → **Deploy from GitHub repo** → elige `stock-scanner`.
+3. Cuando termine el despliegue, entra al servicio → pestaña **Settings** →
+   sección **Networking** → pulsa **Generate Domain**.
+4. Esa es tu dirección pública, algo como
+   `https://stock-scanner-production-xxxx.up.railway.app`
+
+## Paso 3 — Guardar el acceso en tus dispositivos
 
 - **iPhone**: abre la dirección en Safari → botón Compartir → **Añadir a
   pantalla de inicio**. Queda como una app más.
 - **PC / MacBook**: guárdala en favoritos del navegador.
 
-## Cosas que debes saber del plan gratuito
-
-- Si nadie usa la app durante 15 minutos, Render la "duerme". La siguiente
-  visita tarda ~1 minuto en despertar. Después va rápida. Es normal.
-- Si algún día quieres que nunca duerma, el plan de pago más barato de Render
-  cuesta 7 USD/mes. No es necesario.
-
 ## Opcional — Datos en tiempo real con tu cuenta Premium
 
-Sin hacer nada, los datos llegan con ~15 minutos de retraso (suficiente para
-scans diarios/semanales). Si quieres tiempo real:
+Sin configurar nada, los datos llegan con ~15 minutos de retraso (suficiente
+para señales diarias/semanales; para las temporalidades de 15 min o 1 hora
+conviene el tiempo real):
 
 1. En tu PC, entra a tradingview.com con tu cuenta Premium.
-2. Pulsa F12 → pestaña **Application** → **Cookies** → `https://es.tradingview.com`
-   → copia el valor de la cookie llamada `sessionid`.
-3. En Render: tu servicio → **Environment** → **Add Environment Variable**:
-   - Key: `TV_SESSIONID`
-   - Value: (pega el valor copiado)
-4. Pulsa **Save Changes**. La cookie caduca cada cierto tiempo; si vuelven los
-   datos con retraso, repite estos pasos.
+2. Pulsa F12 → pestaña **Application** → **Cookies** →
+   `https://es.tradingview.com` → copia el valor de la cookie `sessionid`.
+3. Añade la variable de entorno en tu plataforma:
+   - **Vercel**: tu proyecto → **Settings** → **Environment Variables** →
+     Key: `TV_SESSIONID`, Value: (lo copiado) → **Save** → redespliega
+     (Deployments → ⋯ → Redeploy).
+   - **Railway**: tu servicio → pestaña **Variables** → **New Variable** →
+     `TV_SESSIONID` = (lo copiado).
+4. La cookie caduca cada cierto tiempo; si vuelven los datos con retraso,
+   repite estos pasos.
 
 ## ¿Prefieres que lo haga contigo?
 

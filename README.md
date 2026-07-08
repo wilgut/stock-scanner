@@ -18,7 +18,9 @@ Luego abrir http://localhost:8877
 
 ## Publicar en internet
 
-Ver [DESPLIEGUE.md](DESPLIEGUE.md) — guía paso a paso para Render.com (gratis).
+Ver [DESPLIEGUE.md](DESPLIEGUE.md) — guía paso a paso para GitHub + Vercel
+(recomendado, gratis) o Railway (alternativa). La app incluye `vercel.json`
+(Vercel) y `Procfile` (Railway), listos para ambas plataformas.
 
 ## Datos
 
