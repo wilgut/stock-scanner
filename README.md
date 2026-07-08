@@ -1,5 +1,8 @@
 # Scanner de Acciones
 
+App en producción: https://stock-scanner-six-delta.vercel.app (se redespliega
+automáticamente con cada cambio subido a GitHub).
+
 Web app de scans de stock picking con datos del screener de TradingView
 (NYSE, NASDAQ, AMEX). Incluye scans propios de doble marco temporal
 (MACD y RSI diario + semanal) y scans institucionales clásicos
