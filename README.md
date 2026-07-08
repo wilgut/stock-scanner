@@ -9,6 +9,10 @@ Web app de scans de stock picking con datos del screener de TradingView
 (Minervini, CANSLIM, Golden Cross, ruptura de 52 semanas, volumen inusual,
 gap alcista, rebote sobrevendido, pullback a la SMA 50).
 
+## Uso local con tiempo real (PC, Mac, temporalidades bajas)
+
+Ver [USO-LOCAL.md](USO-LOCAL.md) — guía paso a paso.
+
 ## Ejecutar en esta PC
 
 Doble clic en `Iniciar Scanner.bat`, o en una terminal:
