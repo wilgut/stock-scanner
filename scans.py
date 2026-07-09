@@ -123,19 +123,21 @@ SCANS = {
         'orden': 'volume',
     },
     'rsi_giro': {
-        'nombre': 'RSI Giro Alcista (cualquier nivel)',
+        'nombre': 'RSI Giro Alcista: ambos giran en su última vela',
         'categoria': 'Mis Scans',
         'multi_tf': True,
         'descripcion': 'El RSI gira a tendencia positiva aunque esté por '
-                       'debajo de 50: el RSI rápido de 7 periodos cruza por '
-                       'encima del RSI de 14 dentro de las velas elegidas, y '
-                       'en el marco lento ya está arriba. Detecta el cambio '
-                       'de momentum antes que el cruce de 50.',
+                       'debajo de 50: el RSI rápido de 7 cruza por encima '
+                       'del RSI de 14 en AMBOS marcos, cada uno en su vela '
+                       'actual. Mismo criterio que el MACD Estricto: el '
+                       'cambio debe ser recién nacido en las dos '
+                       'temporalidades.',
         'condiciones': lambda f, s, modo, n: [
             col(f'RSI7{f}') > col(f'RSI{f}'),
             col(f'RSI7[{min(n, _max_hist(f))}]{f}') <=
             col(f'RSI[{min(n, _max_hist(f))}]{f}'),
             col(f'RSI7{s}') > col(f'RSI{s}'),
+            col(f'RSI7[1]{s}') <= col(f'RSI[1]{s}'),
         ],
         'orden': 'volume',
     },
