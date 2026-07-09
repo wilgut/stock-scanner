@@ -9,7 +9,8 @@ scanner para compararlos.
 """
 import json
 import os
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
@@ -19,6 +20,14 @@ from scans import SCANS, _get_data, run_scan
 
 NY = ZoneInfo('America/New_York')
 PREFIJO = 'senales/'
+
+# URL pública del almacén (los snapshots se guardan con nombre determinista,
+# así la lectura no necesita token y funciona en cualquier copia de la app;
+# el token BLOB_READ_WRITE_TOKEN solo hace falta para escribir).
+BLOB_BASE = os.environ.get(
+    'BLOB_PUBLIC_BASE',
+    'https://0wpoimgq8svearke.public.blob.vercel-storage.com',
+)
 
 
 def _cargar_env_local():
@@ -67,19 +76,31 @@ def guardar_snapshot():
     return fecha, {k: len(v) for k, v in datos['scans'].items()}, errores
 
 
-def _listar_snapshots():
-    blob = _blob()
-    blobs, cursor = [], None
-    while True:
-        opts = {'prefix': PREFIJO, 'limit': '1000'}
-        if cursor:
-            opts['cursor'] = cursor
-        res = blob.list(opts)
-        blobs += res.get('blobs', [])
-        cursor = res.get('cursor')
-        if not res.get('hasMore'):
-            break
-    return blobs
+def _descargar_snapshots(desde, hasta):
+    """Descarga los snapshots del rango directamente por URL pública
+    (sin token), en paralelo."""
+    d0, d1 = date.fromisoformat(desde), date.fromisoformat(hasta)
+    if d0 > d1:
+        d0, d1 = d1, d0
+    d0 = max(d0, d1 - timedelta(days=400))
+    fechas = []
+    d = d0
+    while d <= d1:
+        fechas.append(d.isoformat())
+        d += timedelta(days=1)
+
+    def bajar(fecha):
+        try:
+            r = requests.get(f'{BLOB_BASE}/{PREFIJO}{fecha}.json', timeout=15)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        return None
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        docs = list(pool.map(bajar, fechas))
+    return [d for d in docs if d]
 
 
 def _precios_actuales(tickers):
@@ -96,14 +117,7 @@ def _precios_actuales(tickers):
 
 def evaluar(desde, hasta):
     """Rentabilidad (desde la señal hasta hoy) de las señales emitidas en el rango."""
-    docs = []
-    for b in _listar_snapshots():
-        fecha = b['pathname'][len(PREFIJO):].removesuffix('.json')
-        if desde <= fecha <= hasta:
-            try:
-                docs.append(requests.get(b['url'], timeout=30).json())
-            except Exception:
-                pass
+    docs = _descargar_snapshots(desde, hasta)
 
     # Primera aparición de cada (scan, ticker) dentro del rango
     senales = {}
