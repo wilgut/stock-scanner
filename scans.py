@@ -15,7 +15,7 @@ import time
 import traceback
 
 import pandas as pd
-from tradingview_screener import Query, col
+from tradingview_screener import And, Or, Query, col
 
 EXCHANGES = ['NASDAQ', 'NYSE', 'AMEX']
 
@@ -52,11 +52,18 @@ def _macd_evento(tf, modo, n):
             col(f'MACD.macd{tf}') > col(f'MACD.signal{tf}'),
             col(f'MACD.macd[{k}]{tf}') <= col(f'MACD.signal[{k}]{tf}'),
         ]
-    # giro: la línea MACD pasa de bajar a subir (donde hay 2 velas de
-    # historia se confirma que venía bajando)
+    # giro: la línea MACD pasa de bajar a subir. Con 2 velas de historia
+    # (marco diario) se confirma que venía bajando; en los demás marcos se
+    # exige que el giro sea fresco: la línea sube pero sigue por debajo de
+    # su señal, o la está cruzando justo ahora.
     conds = [col(f'MACD.macd{tf}') > col(f'MACD.macd[1]{tf}')]
     if _max_hist(tf) >= 2:
         conds.append(col(f'MACD.macd[1]{tf}') <= col(f'MACD.macd[2]{tf}'))
+    else:
+        conds.append(Or(
+            col(f'MACD.macd{tf}') < col(f'MACD.signal{tf}'),
+            col(f'MACD.macd[1]{tf}') <= col(f'MACD.signal[1]{tf}'),
+        ))
     return conds
 
 
@@ -87,9 +94,10 @@ SCANS = {
         'nombre': 'MACD Doble Estricto (señal simultánea)',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'descripcion': 'La MACD del marco rápido Y la del lento dan la señal '
-                       'a la vez (giro o cruce, según el selector). Muy poco '
-                       'frecuente pero muy potente: puede dar 0 resultados '
+        'descripcion': 'La MACD del marco rápido Y la del lento cambian a '
+                       'tendencia positiva a la vez: giro fresco en ambos '
+                       'marcos (o cruce en ambos, según el selector). Poco '
+                       'frecuente y muy potente: puede dar 0 resultados '
                        'muchos días.',
         'condiciones': lambda f, s, modo, n: [
             *_macd_evento(f, modo, n),
@@ -337,7 +345,7 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
         Query()
         .set_markets('america')
         .select(*COLUMNS_BASE, rsi_fast, rsi_slow)
-        .where(
+        .where2(And(
             col('type') == 'stock',
             col('typespecs').has('common'),
             col('is_primary') == True,
@@ -345,7 +353,7 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
             col('close') > min_price,
             col('volume') > min_volume,
             *condiciones,
-        )
+        ))
         .order_by(scan['orden'], ascending=False)
         .limit(limit)
     )
