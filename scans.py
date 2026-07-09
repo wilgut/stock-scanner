@@ -83,7 +83,8 @@ SCANS = {
         'descripcion': 'La MACD del marco rápido da señal AHORA — giro de la '
                        'línea (la 1ª vela del cambio de tendencia) o cruce '
                        'sobre su señal, según el selector — y la MACD del '
-                       'marco lento ya está en tendencia positiva.',
+                       'marco lento ya está en tendencia positiva (reciente '
+                       'o madura, no importa la antigüedad).',
         'condiciones': lambda f, s, modo, n: [
             *_macd_evento(f, modo, n),
             *_macd_confirmacion(s, modo),
@@ -91,14 +92,15 @@ SCANS = {
         'orden': 'volume',
     },
     'macd_doble_estricto': {
-        'nombre': 'MACD Doble Estricto (señal simultánea)',
+        'nombre': 'MACD Doble Secuencial: mayor confirma → menor dispara',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'descripcion': 'La MACD del marco rápido Y la del lento cambian a '
-                       'tendencia positiva a la vez: giro fresco en ambos '
-                       'marcos (o cruce en ambos, según el selector). Poco '
-                       'frecuente y muy potente: puede dar 0 resultados '
-                       'muchos días.',
+        'descripcion': 'Primero verifica que el marco MAYOR ya cambió a '
+                       'tendencia positiva hace poco (giro reciente: línea '
+                       'subiendo todavía en fase temprana, bajo su señal o '
+                       'cruzándola). Con esa confirmación, exige que el marco '
+                       'menor cambie a positivo AHORA. A diferencia del scan '
+                       'anterior, excluye tendencias mayores ya maduras.',
         'condiciones': lambda f, s, modo, n: [
             *_macd_evento(f, modo, n),
             *_macd_evento(s, modo, n),
