@@ -134,7 +134,18 @@ def evaluar(desde, hasta):
         })
 
     resumen = []
-    for scan_id, filas in detalle.items():
+    for scan_id, scan in SCANS.items():
+        filas = detalle.get(scan_id)
+        if not filas:
+            # Sin señales en el periodo: se muestra igual para que el
+            # comparativo incluya todos los scanners.
+            resumen.append({
+                'scan': scan_id, 'nombre': scan['nombre'],
+                'categoria': scan['categoria'], 'senales': 0,
+                'media': None, 'mediana': None, 'positivas': None,
+                'mejor': None, 'peor': None,
+            })
+            continue
         rents = sorted(f['rent'] for f in filas)
         n = len(rents)
         mediana = rents[n // 2] if n % 2 else (rents[n // 2 - 1] + rents[n // 2]) / 2
@@ -153,7 +164,8 @@ def evaluar(desde, hasta):
         })
         detalle[scan_id] = sorted(filas, key=lambda f: -f['rent'])
 
-    resumen.sort(key=lambda r: -r['media'])
+    # Con datos primero (por rentabilidad media desc.); sin señales al final
+    resumen.sort(key=lambda r: (r['media'] is None, -(r['media'] or 0)))
     dias = sorted({d.get('fecha') for d in docs if d.get('fecha')})
     return {'desde': desde, 'hasta': hasta, 'dias_registrados': dias,
             'resumen': resumen, 'detalle': detalle}

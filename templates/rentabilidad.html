@@ -107,6 +107,7 @@ document.querySelectorAll('.periodo button[data-dias]').forEach(b => {
 });
 
 function rentHtml(v) {
+  if (v == null) return '<span style="color:var(--muted)">—</span>';
   const cls = v >= 0 ? 'pos' : 'neg';
   return `<span class="${cls}">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
 }
@@ -132,6 +133,18 @@ async function cargar() {
       ${data.dias_registrados.length} día(s) con registro ·
       rentabilidad medida hasta el precio actual · pulsa un scanner para ver sus acciones`;
     const filas = data.resumen.map((s, i) => {
+      if (!s.senales) {
+        return `
+        <tr class="scan-fila" style="opacity:.55">
+          <td><span class="flecha">·</span>${s.nombre}<span class="cat">${s.categoria}</span></td>
+          <td>0</td>
+          <td>${rentHtml(null)}</td>
+          <td class="col-opcional">${rentHtml(null)}</td>
+          <td>—</td>
+          <td class="col-opcional">—</td>
+          <td class="col-opcional">—</td>
+        </tr>`;
+      }
       const det = (data.detalle[s.scan] || []).map(d => {
         const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(d.ticker)}`;
         return `<tr>
