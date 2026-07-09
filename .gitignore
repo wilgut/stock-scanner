@@ -4,3 +4,5 @@ __pycache__/
 tv_sessionid.txt
 
 .vercel
+
+.env*

@@ -20,6 +20,8 @@
   h1 { font-size: 1.5rem; }
   h1 span { color: var(--accent); }
   .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+  a.nav-rent { color: var(--accent); text-decoration: none; font-weight: 600; }
+  a.nav-rent:hover { text-decoration: underline; }
 
   .filtros {
     display: flex; gap: 12px; flex-wrap: wrap; align-items: end;
@@ -97,7 +99,8 @@
 <body>
 <header>
   <h1>📈 Scanner de <span>Acciones</span></h1>
-  <div class="subtitle">Scans de stock picking con datos del screener de TradingView · NYSE, NASDAQ y AMEX</div>
+  <div class="subtitle">Scans de stock picking con datos del screener de TradingView · NYSE, NASDAQ y AMEX
+    · <a class="nav-rent" href="/rentabilidad">📊 Rentabilidad de los scanners</a></div>
 </header>
 
 <div class="filtros">
@@ -117,6 +120,15 @@
       <option value="2000000000">$2 B (mid cap+)</option>
       <option value="10000000000">$10 B (large cap+)</option>
       <option value="200000000000">$200 B (mega cap)</option>
+    </select>
+  </div>
+  <div>
+    <label for="min_flujo">Flujo institucional mínimo</label>
+    <select id="min_flujo">
+      <option value="0" selected>Cualquiera</option>
+      <option value="50">≥ 50%</option>
+      <option value="70">≥ 70%</option>
+      <option value="90">≥ 90%</option>
     </select>
   </div>
 </div>
@@ -167,6 +179,7 @@ async function ejecutar(scanId, multiTf) {
     min_price: document.getElementById('min_price').value || 0,
     min_volume: document.getElementById('min_volume').value || 0,
     min_mcap: document.getElementById('min_mcap').value || 0,
+    min_flujo: document.getElementById('min_flujo').value || 0,
   });
   if (multiTf) p.set('tf', document.getElementById('tf').value);
   try {
@@ -193,6 +206,8 @@ const COLUMNAS = [
   { key: 'prob_flujo', label: 'Flujo Inst.', num: true },
   { key: 'close', label: 'Precio', num: true },
   { key: 'change', label: 'Cambio', num: true },
+  { key: 'Perf.W', label: 'Rent 1S', num: true, opt: true },
+  { key: 'Perf.1M', label: 'Rent 1M', num: true, opt: true },
   { key: 'volume', label: 'Volumen', num: true },
   { key: 'relative_volume_10d_calc', label: 'Vol. Rel.', num: true, opt: true },
   { key: 'rsi_fast', label: 'RSI', num: true },
@@ -220,6 +235,11 @@ function celda(colDef, r) {
     case 'change': {
       const chg = r.change == null ? 0 : r.change;
       return `<td class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${fmtNum(r.change, 2)}%</td>`;
+    }
+    case 'Perf.W': case 'Perf.1M': {
+      const v = r[colDef.key];
+      if (v == null) return `<td${opt}>—</td>`;
+      return `<td class="col-opcional ${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${fmtNum(v, 1)}%</td>`;
     }
     case 'volume': return `<td>${fmtVol(r.volume)}</td>`;
     case 'relative_volume_10d_calc': return `<td${opt}>${fmtNum(r.relative_volume_10d_calc, 1)}x</td>`;

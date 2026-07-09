@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rentabilidad de los Scanners</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #2f81f7;
+    --green: #3fb950; --red: #f85149; --gold: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px; max-width: 1100px; margin: 0 auto;
+  }
+  header { margin-bottom: 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 1.4rem; }
+  h1 span { color: var(--accent); }
+  a.volver { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+  .subtitle { color: var(--muted); font-size: 0.82rem; margin-bottom: 16px; line-height: 1.5; }
+
+  .periodo {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: end;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 18px;
+  }
+  .periodo button {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
+  }
+  .periodo button.activo { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .periodo .fechas { display: flex; gap: 8px; align-items: end; margin-left: auto; flex-wrap: wrap; }
+  .periodo label { font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 3px; }
+  .periodo input[type=date] {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 7px 8px; font-size: 0.85rem;
+  }
+  .periodo .aplicar { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #estado { color: var(--muted); font-size: 0.85rem; margin: 14px 0; }
+  .tabla-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th, td { padding: 9px 10px; text-align: right; white-space: nowrap; }
+  th { background: var(--panel); color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+  td:first-child, th:first-child { text-align: left; }
+  tr.scan-fila { border-top: 1px solid var(--border); cursor: pointer; }
+  tr.scan-fila:hover td { background: rgba(47, 129, 247, 0.07); }
+  tr.top td:first-child { color: var(--gold); font-weight: 700; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .cat { font-size: 0.7rem; color: var(--muted); display: block; }
+  .detalle td { padding: 0; }
+  .detalle-int { padding: 6px 12px 14px; }
+  .detalle-int table { font-size: 0.8rem; }
+  .detalle-int th { background: transparent; }
+  a.ticker { color: var(--accent); font-weight: 700; text-decoration: none; }
+  a.ticker:hover { text-decoration: underline; }
+  .flecha { color: var(--muted); font-size: 0.75rem; margin-right: 6px; }
+  @media (max-width: 640px) { .col-opcional { display: none; } body { padding: 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Rentabilidad de los <span>Scanners</span></h1>
+  <a class="volver" href="/">← Volver a los scans</a>
+</header>
+<div class="subtitle">
+  Cada día hábil al cierre del mercado se registran automáticamente las señales de todos los
+  scanners (marco Diario + Semanal) con su precio. Aquí se mide la <b>rentabilidad desde el día
+  de la señal hasta el precio actual</b>, para las señales emitidas en el periodo elegido.
+  Cada acción cuenta una sola vez por scanner (su primera señal del periodo).
+</div>
+
+<div class="periodo">
+  <button data-dias="0">Hoy</button>
+  <button data-dias="7">7 días</button>
+  <button data-dias="30" class="activo">30 días</button>
+  <button data-dias="90">90 días</button>
+  <button data-dias="365">Todo</button>
+  <div class="fechas">
+    <div><label>Desde</label><input type="date" id="desde"></div>
+    <div><label>Hasta</label><input type="date" id="hasta"></div>
+    <button class="aplicar" onclick="cargar()">Aplicar</button>
+  </div>
+</div>
+
+<div id="estado">Cargando…</div>
+<div id="contenido"></div>
+
+<script>
+const hoy = new Date();
+function fmtFecha(d) { return d.toISOString().slice(0, 10); }
+function setRango(dias) {
+  const desde = new Date(hoy); desde.setDate(desde.getDate() - dias);
+  document.getElementById('desde').value = fmtFecha(desde);
+  document.getElementById('hasta').value = fmtFecha(hoy);
+}
+document.querySelectorAll('.periodo button[data-dias]').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.periodo button[data-dias]').forEach(x => x.classList.remove('activo'));
+    b.classList.add('activo');
+    setRango(parseInt(b.dataset.dias));
+    cargar();
+  };
+});
+
+function rentHtml(v) {
+  const cls = v >= 0 ? 'pos' : 'neg';
+  return `<span class="${cls}">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+}
+
+async function cargar() {
+  const estado = document.getElementById('estado');
+  const cont = document.getElementById('contenido');
+  estado.textContent = 'Consultando señales registradas y precios actuales…';
+  cont.innerHTML = '';
+  const desde = document.getElementById('desde').value;
+  const hasta = document.getElementById('hasta').value;
+  try {
+    const r = await fetch(`/api/rentabilidad?desde=${desde}&hasta=${hasta}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error');
+    if (!data.resumen.length) {
+      estado.innerHTML = `Sin señales registradas entre <b>${desde}</b> y <b>${hasta}</b>.<br>
+        El registro automático comenzó el <b>2026-07-08</b>: las estadísticas se van
+        acumulando cada día hábil al cierre. Vuelve en unos días para comparar.`;
+      return;
+    }
+    estado.innerHTML = `Señales emitidas entre <b>${desde}</b> y <b>${hasta}</b> ·
+      ${data.dias_registrados.length} día(s) con registro ·
+      rentabilidad medida hasta el precio actual · pulsa un scanner para ver sus acciones`;
+    const filas = data.resumen.map((s, i) => {
+      const det = (data.detalle[s.scan] || []).map(d => {
+        const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(d.ticker)}`;
+        return `<tr>
+          <td><a class="ticker" href="${url}" target="_blank">${d.symbol}</a></td>
+          <td>${d.fecha}</td>
+          <td>$${d.precio_senal.toFixed(2)}</td>
+          <td>$${d.precio_actual.toFixed(2)}</td>
+          <td>${rentHtml(d.rent)}</td>
+          <td class="col-opcional">${d.flujo == null ? '—' : d.flujo + '%'}</td>
+        </tr>`;
+      }).join('');
+      return `
+      <tr class="scan-fila ${i === 0 ? 'top' : ''}" onclick="toggle('det-${s.scan}')">
+        <td><span class="flecha">▸</span>${i === 0 ? '🏆 ' : ''}${s.nombre}<span class="cat">${s.categoria}</span></td>
+        <td>${s.senales}</td>
+        <td>${rentHtml(s.media)}</td>
+        <td class="col-opcional">${rentHtml(s.mediana)}</td>
+        <td>${s.positivas}%</td>
+        <td class="col-opcional">${s.mejor.symbol} ${rentHtml(s.mejor.rent)}</td>
+        <td class="col-opcional">${s.peor.symbol} ${rentHtml(s.peor.rent)}</td>
+      </tr>
+      <tr class="detalle" id="det-${s.scan}" style="display:none"><td colspan="7">
+        <div class="detalle-int"><table>
+          <thead><tr><th>Ticker</th><th>Fecha señal</th><th>Precio señal</th>
+          <th>Precio actual</th><th>Rentabilidad</th><th class="col-opcional">Flujo</th></tr></thead>
+          <tbody>${det}</tbody>
+        </table></div>
+      </td></tr>`;
+    }).join('');
+    cont.innerHTML = `<div class="tabla-wrap"><table>
+      <thead><tr>
+        <th>Scanner</th><th>Señales</th><th>Rent. media</th>
+        <th class="col-opcional">Mediana</th><th>% Positivas</th>
+        <th class="col-opcional">Mejor</th><th class="col-opcional">Peor</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div>`;
+  } catch (e) {
+    estado.textContent = e.message;
+  }
+}
+function toggle(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+setRango(30);
+cargar();
+</script>
+</body>
+</html>

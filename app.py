@@ -35,12 +35,13 @@ def api_scan(scan_id):
         min_price = float(request.args.get('min_price', 5))
         min_volume = int(request.args.get('min_volume', 500_000))
         min_mcap = float(request.args.get('min_mcap', 0))
+        min_flujo = int(request.args.get('min_flujo', 0))
     except ValueError:
         return jsonify({'error': 'Filtros inválidos'}), 400
     tf = request.args.get('tf', TF_DEFAULT)
     try:
         total, filas, etiquetas = run_scan(scan_id, min_price, min_volume,
-                                           min_mcap, tf)
+                                           min_mcap, tf, min_flujo=min_flujo)
     except Exception:
         traceback.print_exc()
         return jsonify({'error': 'Error consultando TradingView. '
@@ -51,6 +52,42 @@ def api_scan(scan_id):
         'resultados': filas,
         'etiquetas': etiquetas,
     })
+
+
+@app.route('/rentabilidad')
+def rentabilidad():
+    return render_template('rentabilidad.html')
+
+
+@app.route('/api/snapshot', methods=['GET', 'POST'])
+def api_snapshot():
+    from historial import guardar_snapshot
+    try:
+        fecha, conteos, errores = guardar_snapshot()
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'error': 'No se pudo guardar el registro de señales.'}), 502
+    return jsonify({'fecha': fecha, 'senales_por_scan': conteos,
+                    'errores': errores})
+
+
+@app.route('/api/rentabilidad')
+def api_rentabilidad():
+    from historial import evaluar, hoy_ny
+    hoy = hoy_ny()
+    desde = request.args.get('desde', hoy)
+    hasta = request.args.get('hasta', hoy)
+    try:
+        import re
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', desde) or \
+           not re.fullmatch(r'\d{4}-\d{2}-\d{2}', hasta):
+            return jsonify({'error': 'Fechas inválidas (formato AAAA-MM-DD)'}), 400
+        datos = evaluar(desde, hasta)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'error': 'No se pudo calcular la rentabilidad. '
+                                 'Inténtalo de nuevo en unos segundos.'}), 502
+    return jsonify(datos)
 
 
 if __name__ == '__main__':

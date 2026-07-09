@@ -13,5 +13,11 @@
         "service": "web"
       }
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/snapshot",
+      "schedule": "35 21 * * 1-5"
+    }
   ]
 }

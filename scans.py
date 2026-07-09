@@ -34,6 +34,7 @@ TF_DEFAULT = '1D-1W'
 COLUMNS_BASE = [
     'name', 'description', 'close', 'change', 'volume',
     'relative_volume_10d_calc', 'market_cap_basic', 'sector', 'industry',
+    'Perf.W', 'Perf.1M',
 ]
 
 SCANS = {
@@ -278,7 +279,7 @@ def flujo_grupos():
 
 
 def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
-             tf=TF_DEFAULT, limit=60):
+             tf=TF_DEFAULT, limit=60, min_flujo=0):
     """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
     scan = SCANS[scan_id]
 
@@ -324,6 +325,8 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
             for s, i in zip(df['sector'], df['industry'])
         ]
         df = df.sort_values('prob_flujo', ascending=False)
+        if min_flujo > 0:
+            df = df[df['prob_flujo'] >= min_flujo]
     except Exception:
         df['prob_flujo'] = None
 

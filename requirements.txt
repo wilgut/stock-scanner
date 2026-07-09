@@ -2,3 +2,5 @@ flask>=3.0
 tradingview-screener>=3.2
 waitress>=3.0
 gunicorn>=22.0
+vercel_blob>=0.4
+tzdata>=2024.1
