@@ -310,10 +310,12 @@ function render(scroll) {
 
   const cuerpo = filas.map(r => `<tr>${COLUMNAS.map(c => celda(c, r)).join('')}</tr>`).join('');
 
+  const nota = vista.etiquetas && vista.etiquetas.nota
+    ? `<div class="info" style="color:var(--gold)">⚠️ ${vista.etiquetas.nota}</div>` : '';
   cont.innerHTML = `<h2>${vista.titulo}</h2>
     <div class="info">${vista.total} coincidencias en total · mostrando ${filas.length}
     · ordenado por flujo institucional del sector/industria · pulsa cualquier
-    encabezado para reordenar · pulsa un ticker para abrir su gráfico en TradingView</div>
+    encabezado para reordenar · pulsa un ticker para abrir su gráfico en TradingView</div>${nota}
     <div class="tabla-wrap"><table>
       <thead><tr>${ths}</tr></thead>
       <tbody>${cuerpo}</tbody>
