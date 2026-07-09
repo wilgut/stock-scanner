@@ -37,32 +37,63 @@ COLUMNS_BASE = [
     'Perf.W', 'Perf.1M',
 ]
 
+# Profundidad de historia disponible en el screener: el marco diario expone
+# hasta 2 velas atrás ([1] y [2]); semanal, mensual e intradía solo 1 ([1]).
+def _max_hist(tf):
+    return 2 if tf == '' else 1
+
+
+def _macd_evento(tf, modo, n):
+    """Señal MACD en un marco: giro de la línea (1ª vela del cambio) o
+    cruce sobre su señal dentro de las últimas n velas."""
+    if modo == 'cruce':
+        k = min(n, _max_hist(tf))
+        return [
+            col(f'MACD.macd{tf}') > col(f'MACD.signal{tf}'),
+            col(f'MACD.macd[{k}]{tf}') <= col(f'MACD.signal[{k}]{tf}'),
+        ]
+    # giro: la línea MACD pasa de bajar a subir (donde hay 2 velas de
+    # historia se confirma que venía bajando)
+    conds = [col(f'MACD.macd{tf}') > col(f'MACD.macd[1]{tf}')]
+    if _max_hist(tf) >= 2:
+        conds.append(col(f'MACD.macd[1]{tf}') <= col(f'MACD.macd[2]{tf}'))
+    return conds
+
+
+def _macd_confirmacion(tf, modo):
+    """Marco lento ya en tendencia positiva (según el tipo de señal)."""
+    if modo == 'giro':
+        return [col(f'MACD.macd{tf}') > col(f'MACD.macd[1]{tf}')]
+    return [col(f'MACD.macd{tf}') > col(f'MACD.signal{tf}')]
+
+
 SCANS = {
     # ------------------------- MIS SCANS -------------------------
     'macd_doble': {
         'nombre': 'MACD Doble: señal + confirmación',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'descripcion': 'La línea MACD del marco rápido cruza AHORA por encima '
-                       'de su señal, y la MACD del marco lento ya está en '
-                       'tendencia positiva. Ej. Diario + Semanal: giro diario '
-                       'confirmado por el semanal.',
-        'condiciones': lambda f, s: [
-            col(f'MACD.macd{f}').crosses_above(col(f'MACD.signal{f}')),
-            col(f'MACD.macd{s}') > col(f'MACD.signal{s}'),
+        'descripcion': 'La MACD del marco rápido da señal AHORA — giro de la '
+                       'línea (la 1ª vela del cambio de tendencia) o cruce '
+                       'sobre su señal, según el selector — y la MACD del '
+                       'marco lento ya está en tendencia positiva.',
+        'condiciones': lambda f, s, modo, n: [
+            *_macd_evento(f, modo, n),
+            *_macd_confirmacion(s, modo),
         ],
         'orden': 'volume',
     },
     'macd_doble_estricto': {
-        'nombre': 'MACD Doble Estricto (cruce simultáneo)',
+        'nombre': 'MACD Doble Estricto (señal simultánea)',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'descripcion': 'La MACD del marco rápido Y la del lento cruzan a '
-                       'positivo a la vez. Señal muy poco frecuente pero muy '
-                       'potente: puede dar 0 resultados muchos días.',
-        'condiciones': lambda f, s: [
-            col(f'MACD.macd{f}').crosses_above(col(f'MACD.signal{f}')),
-            col(f'MACD.macd{s}').crosses_above(col(f'MACD.signal{s}')),
+        'descripcion': 'La MACD del marco rápido Y la del lento dan la señal '
+                       'a la vez (giro o cruce, según el selector). Muy poco '
+                       'frecuente pero muy potente: puede dar 0 resultados '
+                       'muchos días.',
+        'condiciones': lambda f, s, modo, n: [
+            *_macd_evento(f, modo, n),
+            *_macd_evento(s, modo, n),
         ],
         'orden': 'volume',
     },
@@ -70,11 +101,12 @@ SCANS = {
         'nombre': 'RSI Doble: cruce de 50',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'descripcion': 'El RSI del marco rápido cruza AHORA por encima de 50 '
-                       '(zona alcista) y el RSI del marco lento ya está por '
-                       'encima de 50. Momentum positivo en ambos marcos.',
-        'condiciones': lambda f, s: [
-            col(f'RSI{f}').crosses_above(50),
+        'descripcion': 'El RSI del marco rápido cruza por encima de 50 (zona '
+                       'alcista) dentro de las velas elegidas, y el RSI del '
+                       'marco lento ya está por encima de 50.',
+        'condiciones': lambda f, s, modo, n: [
+            col(f'RSI{f}') > 50,
+            col(f'RSI[{min(n, _max_hist(f))}]{f}') <= 50,
             col(f'RSI{s}') > 50,
         ],
         'orden': 'volume',
@@ -85,11 +117,13 @@ SCANS = {
         'multi_tf': True,
         'descripcion': 'El RSI gira a tendencia positiva aunque esté por '
                        'debajo de 50: el RSI rápido de 7 periodos cruza por '
-                       'encima del RSI de 14 en el marco rápido, y en el marco '
-                       'lento ya giró. Detecta el cambio de momentum antes que '
-                       'el cruce de 50.',
-        'condiciones': lambda f, s: [
-            col(f'RSI7{f}').crosses_above(col(f'RSI{f}')),
+                       'encima del RSI de 14 dentro de las velas elegidas, y '
+                       'en el marco lento ya está arriba. Detecta el cambio '
+                       'de momentum antes que el cruce de 50.',
+        'condiciones': lambda f, s, modo, n: [
+            col(f'RSI7{f}') > col(f'RSI{f}'),
+            col(f'RSI7[{min(n, _max_hist(f))}]{f}') <=
+            col(f'RSI[{min(n, _max_hist(f))}]{f}'),
             col(f'RSI7{s}') > col(f'RSI{s}'),
         ],
         'orden': 'volume',
@@ -279,15 +313,18 @@ def flujo_grupos():
 
 
 def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
-             tf=TF_DEFAULT, limit=60, min_flujo=0):
+             tf=TF_DEFAULT, limit=60, min_flujo=0, modo='giro', velas=1):
     """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
     scan = SCANS[scan_id]
+    if modo not in ('giro', 'cruce'):
+        modo = 'giro'
+    velas = max(1, min(int(velas), 2))
 
     if scan.get('multi_tf'):
         if tf not in TF_PAIRS:
             tf = TF_DEFAULT
         fast, slow, lbl_fast, lbl_slow = TF_PAIRS[tf]
-        condiciones = scan['condiciones'](fast, slow)
+        condiciones = scan['condiciones'](fast, slow, modo, velas)
     else:
         fast, slow, lbl_fast, lbl_slow = TF_PAIRS[TF_DEFAULT]
         condiciones = scan['condiciones']()

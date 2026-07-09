@@ -41,11 +41,11 @@
   }
   h2.categoria.inst { color: var(--accent); }
 
-  .tf-selector { margin: 0 0 12px; }
+  .tf-selector { margin: 0 0 12px; display: flex; gap: 14px; flex-wrap: wrap; }
   .tf-selector label { font-size: 0.75rem; color: var(--muted); display: block; margin-bottom: 4px; }
   .tf-selector select {
     background: var(--panel); border: 1px solid var(--border); color: var(--text);
-    border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; min-width: 220px;
+    border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; min-width: 180px;
   }
 
   .scans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -137,12 +137,28 @@
   <h2 class="categoria {{ 'inst' if categoria != 'Mis Scans' else '' }}">{{ categoria }}</h2>
   {% if categoria == 'Mis Scans' %}
   <div class="tf-selector">
-    <label for="tf">Temporalidad (señal rápida + confirmación lenta)</label>
-    <select id="tf">
-      {% for valor, etiqueta in tf_opciones.items() %}
-      <option value="{{ valor }}" {{ 'selected' if valor == tf_default else '' }}>{{ etiqueta }}</option>
-      {% endfor %}
-    </select>
+    <div>
+      <label for="tf">Temporalidad (rápida + lenta)</label>
+      <select id="tf">
+        {% for valor, etiqueta in tf_opciones.items() %}
+        <option value="{{ valor }}" {{ 'selected' if valor == tf_default else '' }}>{{ etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="modo">Señal MACD</label>
+      <select id="modo">
+        <option value="giro" selected>Giro de la línea (1ª vela)</option>
+        <option value="cruce">Cruce con su señal (clásico)</option>
+      </select>
+    </div>
+    <div>
+      <label for="velas">Señal en las últimas…</label>
+      <select id="velas">
+        <option value="1" selected>1 vela (la más reciente)</option>
+        <option value="2">2 velas (solo marco Diario)</option>
+      </select>
+    </div>
   </div>
   {% endif %}
   <div class="scans">
@@ -181,7 +197,11 @@ async function ejecutar(scanId, multiTf) {
     min_mcap: document.getElementById('min_mcap').value || 0,
     min_flujo: document.getElementById('min_flujo').value || 0,
   });
-  if (multiTf) p.set('tf', document.getElementById('tf').value);
+  if (multiTf) {
+    p.set('tf', document.getElementById('tf').value);
+    p.set('modo', document.getElementById('modo').value);
+    p.set('velas', document.getElementById('velas').value);
+  }
   try {
     const r = await fetch(`/api/scan/${scanId}?` + p);
     const data = await r.json();
