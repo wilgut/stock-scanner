@@ -86,6 +86,12 @@
   tr:hover td { background: rgba(47, 129, 247, 0.07); }
   a.ticker { color: var(--accent); font-weight: 700; text-decoration: none; }
   a.ticker:hover { text-decoration: underline; }
+  a.tf-chip {
+    color: var(--muted); font-size: 0.68rem; font-weight: 600;
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px;
+    text-decoration: none; margin-left: 4px; white-space: nowrap;
+  }
+  a.tf-chip:hover { color: var(--accent); border-color: var(--accent); }
   .pos { color: var(--green); } .neg { color: var(--red); }
   .nombre-col { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
@@ -186,6 +192,14 @@ function fmtVol(v) {
 }
 function fmtNum(v, d) { return v == null ? '—' : Number(v).toFixed(d); }
 
+const _INTV_ETIQUETA = { '15': '15m', '60': '1h', '240': '4h', 'D': '1D', 'W': '1S', 'M': '1M' };
+function etiquetaIntervalo(i) { return _INTV_ETIQUETA[i] || i; }
+
+// Abre el marco lento en otra pestaña (además del rápido que abre el enlace).
+function abrirLento(url, distinto) {
+  if (distinto) window.open(url, '_blank');
+}
+
 async function ejecutar(scanId, multiTf) {
   const btn = document.getElementById('btn-' + scanId);
   const badge = document.getElementById('badge-' + scanId);
@@ -241,9 +255,19 @@ function celda(colDef, r) {
   switch (colDef.key) {
     case 'ticker': {
       const sym = r.ticker.split(':')[1] || r.ticker;
-      const intv = (vista.etiquetas && vista.etiquetas.intervalo_tv) || 'D';
-      const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}&interval=${intv}`;
-      return `<td><a class="ticker" href="${url}" target="_blank">${sym}</a></td>`;
+      const e = vista.etiquetas || {};
+      const iFast = e.intervalo_tv || 'D';
+      const iSlow = e.intervalo_tv_slow || iFast;
+      const base = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
+      const uFast = `${base}&interval=${iFast}`;
+      const uSlow = `${base}&interval=${iSlow}`;
+      const chip = iSlow !== iFast
+        ? ` <a class="tf-chip" href="${uSlow}" target="_blank" title="Abrir marco lento (${etiquetaIntervalo(iSlow)})">${etiquetaIntervalo(iSlow)}</a>`
+        : '';
+      // El clic principal abre el marco rápido (enlace real) y además intenta
+      // abrir el lento en otra pestaña; el chip queda como respaldo visible.
+      return `<td><a class="ticker" href="${uFast}" target="_blank"
+        onclick="abrirLento('${uSlow}', ${iSlow !== iFast})">${sym}</a>${chip}</td>`;
     }
     case 'description':
       return `<td class="nombre-col col-opcional">${r.description || ''}</td>`;
@@ -316,7 +340,8 @@ function render(scroll) {
   cont.innerHTML = `<h2>${vista.titulo}</h2>
     <div class="info">${vista.total} coincidencias en total · mostrando ${filas.length}
     · ordenado por flujo institucional del sector/industria · pulsa cualquier
-    encabezado para reordenar · pulsa un ticker para abrir su gráfico en TradingView</div>${nota}
+    encabezado para reordenar · pulsa un ticker para abrir su gráfico en las dos
+    temporalidades del scan (una pestaña por marco; el chip abre solo el lento)</div>${nota}
     <div class="tabla-wrap"><table>
       <thead><tr>${ths}</tr></thead>
       <tbody>${cuerpo}</tbody>
