@@ -95,17 +95,24 @@ SCANS = {
         'nombre': 'MACD Doble Estricto: ambos giran en su última vela',
         'categoria': 'Mis Scans',
         'multi_tf': True,
-        'verificar_giro_lento': True,
-        'descripcion': 'El marco MAYOR acaba de cambiar a tendencia positiva '
-                       'en su vela actual (verificado calculando su MACD vela '
-                       'a vela) y el marco menor también gira AHORA, en su '
-                       'última vela. El cambio debe ser recién nacido en '
-                       'ambas temporalidades. Muy selectivo.',
-        'condiciones': lambda f, s, modo, n: [
-            *_macd_evento(f, modo, n),
-            *([col(f'MACD.macd{s}') > col(f'MACD.macd[1]{s}')]
-              if modo == 'giro' else _macd_evento(s, modo, n)),
-        ],
+        'verificar_giro': True,
+        'descripcion': 'El MACD cambia a tendencia positiva en su ÚLTIMA vela '
+                       'tanto en el marco mayor como en el menor. La app '
+                       'verifica el giro vela a vela con datos históricos, en '
+                       'TODAS las temporalidades (incluidas las intradía: '
+                       '15m, 1h, 4h). Muy selectivo: capta el nacimiento '
+                       'simultáneo del impulso.',
+        'condiciones': lambda f, s, modo, n: (
+            [   # modo giro: pre-filtro amplio (ambas líneas MACD subiendo);
+                # el giro exacto en la última vela lo confirma Yahoo después.
+                col(f'MACD.macd{f}') > col(f'MACD.macd[1]{f}'),
+                col(f'MACD.macd{s}') > col(f'MACD.macd[1]{s}'),
+            ] if modo == 'giro' else [
+                # modo cruce: el cruce se verifica exacto en TV (basta 1 vela).
+                *_macd_evento(f, 'cruce', n),
+                *_macd_evento(s, 'cruce', n),
+            ]
+        ),
         'orden': 'volume',
     },
     'rsi_doble': {
@@ -253,37 +260,61 @@ SCANS = {
 }
 
 
-# --------- Verificación exacta del giro en el marco lento (vela a vela) ---------
-# El screener de TradingView solo expone 1 vela de historia en semanal/mensual,
-# insuficiente para confirmar que el giro ocurrió EN la vela actual. Para eso
-# se calcula el MACD del marco lento con datos históricos de Yahoo Finance.
+# --------- Verificación exacta del giro del MACD (vela a vela) ---------
+# El screener de TradingView solo expone 1-2 velas de historia, insuficiente
+# para confirmar en TODAS las temporalidades que el giro (cambio de pendiente
+# de la línea MACD) ocurrió EN la última vela. Para eso se calcula el MACD con
+# datos históricos de Yahoo Finance, en cualquier marco: intradía, diario,
+# semanal o mensual.
 
-_VERIF_INTERVALOS = {'': ('1d', '2y'), '|1W': ('1wk', '3y'), '|1M': ('1mo', '10y')}
+# sufijo TradingView -> (intervalo Yahoo, periodo, ¿resamplear a 4h desde 1h?)
+_YF_INTERVALOS = {
+    '':     ('1d',  '2y',  False),
+    '|1W':  ('1wk', '5y',  False),
+    '|1M':  ('1mo', '10y', False),
+    '|15':  ('15m', '60d', False),
+    '|60':  ('60m', '2y',  False),
+    '|240': ('60m', '2y',  True),   # 4h = resample de velas de 1h
+}
+
+# sufijo TradingView -> código de intervalo en la URL del gráfico de TradingView
+TV_INTERVALO = {'|15': '15', '|60': '60', '|240': '240', '': 'D', '|1W': 'W', '|1M': 'M'}
 
 
 def _giro_en_ultima_vela(m):
     return len(m) >= 3 and m.iloc[-1] > m.iloc[-2] and m.iloc[-2] <= m.iloc[-3]
 
 
-def verificar_giro_lento(tickers, tf_lento):
-    """Confirma con datos de Yahoo qué tickers giraron su MACD del marco
-    lento EN la vela actual. Devuelve (aprobados, pudo_verificar)."""
-    if tf_lento not in _VERIF_INTERVALOS or not tickers:
+def _closes_de(data, sym, un_solo):
+    """Extrae la serie de cierres de un símbolo del resultado de yf.download,
+    tolerando el formato de un solo ticker (sin nivel de ticker)."""
+    if un_solo:
+        return data['Close'].dropna().squeeze()
+    return data[sym]['Close'].dropna()
+
+
+def verificar_giro(tickers, tf):
+    """Confirma con datos de Yahoo qué tickers giraron su MACD EN la última
+    vela del marco `tf`. Devuelve (aprobados, pudo_verificar)."""
+    if tf not in _YF_INTERVALOS or not tickers:
         return set(), False
-    intervalo, periodo = _VERIF_INTERVALOS[tf_lento]
+    intervalo, periodo, resample_4h = _YF_INTERVALOS[tf]
     simbolos = {t: t.split(':')[-1].replace('.', '-') for t in tickers}
+    un_solo = len(simbolos) == 1
     try:
         import yfinance as yf
         data = yf.download(list(simbolos.values()), period=periodo,
                            interval=intervalo, group_by='ticker',
-                           progress=False, threads=True)
+                           progress=False, threads=True, auto_adjust=True)
     except Exception:
         traceback.print_exc()
         return set(), False
     aprobados, evaluados = set(), 0
     for t, sym in simbolos.items():
         try:
-            closes = data[sym]['Close'].dropna()
+            closes = _closes_de(data, sym, un_solo)
+            if resample_4h:
+                closes = closes.resample('4h').last().dropna()
             if len(closes) < 40:
                 continue
             ema12 = closes.ewm(span=12, adjust=False).mean()
@@ -404,25 +435,30 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
             *condiciones,
         ))
         .order_by(scan['orden'], ascending=False)
-        .limit(200 if scan.get('verificar_giro_lento') and modo == 'giro' else limit)
+        .limit(200 if scan.get('verificar_giro') and modo == 'giro' else limit)
     )
     count, df = _get_data(q)
     df = df.rename(columns={rsi_fast: 'rsi_fast', rsi_slow: 'rsi_slow'})
 
     nota = None
-    if scan.get('verificar_giro_lento') and modo == 'giro' and len(df):
-        if slow in _VERIF_INTERVALOS:
-            aprobados, ok = verificar_giro_lento(list(df['ticker']), slow)
+    if scan.get('verificar_giro') and modo == 'giro' and len(df):
+        # Verifica el giro exacto (en la última vela) en AMBOS marcos con
+        # datos de Yahoo. Un ticker pasa solo si ambos marcos giran ahora.
+        tickers = list(df['ticker'])
+        aprobados = set(tickers)
+        sin_verificar = []
+        for tfx, etiqueta_tf in [(fast, lbl_fast), (slow, lbl_slow)]:
+            aprob, ok = verificar_giro(tickers, tfx)
             if ok:
-                df = df[df['ticker'].isin(aprobados)]
-                count = len(df)
+                aprobados &= aprob
             else:
-                nota = ('No se pudo verificar el giro exacto del marco mayor '
-                        '(datos históricos no disponibles ahora): resultados '
-                        'aproximados.')
-        else:
-            nota = ('Con marco mayor intradía no es posible verificar que el '
-                    'giro sea de la última vela: resultados aproximados.')
+                sin_verificar.append(etiqueta_tf)
+        df = df[df['ticker'].isin(aprobados)]
+        count = len(df)
+        if sin_verificar:
+            nota = ('No se pudo verificar el giro exacto en el marco ' +
+                    ' y '.join(sin_verificar) + ' (datos históricos no '
+                    'disponibles ahora): ese marco quedó en modo aproximado.')
         df = df.head(limit)
 
     # Probabilidad de flujo institucional: 40% percentil del sector +
@@ -441,7 +477,12 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
         df['prob_flujo'] = None
 
     df = df.astype(object).where(df.notna(), None)
-    etiquetas = {'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}'}
+    etiquetas = {
+        'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}',
+        # Intervalo del marco rápido (la señal de entrada) para abrir el
+        # gráfico de TradingView en la misma temporalidad del scan.
+        'intervalo_tv': TV_INTERVALO.get(fast, 'D'),
+    }
     if nota:
         etiquetas['nota'] = nota
     return count, df.to_dict(orient='records'), etiquetas

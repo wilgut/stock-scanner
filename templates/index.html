@@ -241,7 +241,8 @@ function celda(colDef, r) {
   switch (colDef.key) {
     case 'ticker': {
       const sym = r.ticker.split(':')[1] || r.ticker;
-      const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
+      const intv = (vista.etiquetas && vista.etiquetas.intervalo_tv) || 'D';
+      const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}&interval=${intv}`;
       return `<td><a class="ticker" href="${url}" target="_blank">${sym}</a></td>`;
     }
     case 'description':
