@@ -86,12 +86,15 @@
   tr:hover td { background: rgba(47, 129, 247, 0.07); }
   a.ticker { color: var(--accent); font-weight: 700; text-decoration: none; }
   a.ticker:hover { text-decoration: underline; }
-  a.tf-chip {
-    color: var(--muted); font-size: 0.68rem; font-weight: 600;
-    border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px;
-    text-decoration: none; margin-left: 4px; white-space: nowrap;
+
+  .res-cabecera { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .res-cabecera h2 { margin: 0; }
+  button.export-btn {
+    background: var(--panel); color: var(--green); border: 1px solid var(--green);
+    border-radius: 8px; padding: 7px 12px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
   }
-  a.tf-chip:hover { color: var(--accent); border-color: var(--accent); }
+  button.export-btn:hover { background: var(--green); color: #0d1117; }
   .pos { color: var(--green); } .neg { color: var(--red); }
   .nombre-col { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
@@ -192,12 +195,24 @@ function fmtVol(v) {
 }
 function fmtNum(v, d) { return v == null ? '—' : Number(v).toFixed(d); }
 
-const _INTV_ETIQUETA = { '15': '15m', '60': '1h', '240': '4h', 'D': '1D', 'W': '1S', 'M': '1M' };
-function etiquetaIntervalo(i) { return _INTV_ETIQUETA[i] || i; }
-
-// Abre el marco lento en otra pestaña (además del rápido que abre el enlace).
-function abrirLento(url, distinto) {
-  if (distinto) window.open(url, '_blank');
+// Exporta los resultados mostrados a un CSV (carpeta de Descargas) con los
+// símbolos en formato EXCHANGE:SYMBOL, listos para importar como watchlist en
+// TradingView (menú de la watchlist → "Importar lista…").
+function exportarCSV() {
+  if (!vista.filas || !vista.filas.length) return;
+  const simbolos = vista.filas.map(r => r.ticker).filter(Boolean);
+  const contenido = simbolos.join(',');
+  const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8' });
+  const fecha = new Date().toISOString().slice(0, 10);
+  const slug = (vista.titulo || 'scan').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'scan';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${slug}-${fecha}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
 
 async function ejecutar(scanId, multiTf) {
@@ -255,19 +270,10 @@ function celda(colDef, r) {
   switch (colDef.key) {
     case 'ticker': {
       const sym = r.ticker.split(':')[1] || r.ticker;
-      const e = vista.etiquetas || {};
-      const iFast = e.intervalo_tv || 'D';
-      const iSlow = e.intervalo_tv_slow || iFast;
-      const base = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
-      const uFast = `${base}&interval=${iFast}`;
-      const uSlow = `${base}&interval=${iSlow}`;
-      const chip = iSlow !== iFast
-        ? ` <a class="tf-chip" href="${uSlow}" target="_blank" title="Abrir marco lento (${etiquetaIntervalo(iSlow)})">${etiquetaIntervalo(iSlow)}</a>`
-        : '';
-      // El clic principal abre el marco rápido (enlace real) y además intenta
-      // abrir el lento en otra pestaña; el chip queda como respaldo visible.
-      return `<td><a class="ticker" href="${uFast}" target="_blank"
-        onclick="abrirLento('${uSlow}', ${iSlow !== iFast})">${sym}</a>${chip}</td>`;
+      // Enlace simple sin fijar intervalo: TradingView abre el diseño por
+      // defecto del usuario (sus paneles con sus propias temporalidades).
+      const url = `https://es.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`;
+      return `<td><a class="ticker" href="${url}" target="_blank">${sym}</a></td>`;
     }
     case 'description':
       return `<td class="nombre-col col-opcional">${r.description || ''}</td>`;
@@ -337,11 +343,14 @@ function render(scroll) {
 
   const nota = vista.etiquetas && vista.etiquetas.nota
     ? `<div class="info" style="color:var(--gold)">⚠️ ${vista.etiquetas.nota}</div>` : '';
-  cont.innerHTML = `<h2>${vista.titulo}</h2>
+  cont.innerHTML = `<div class="res-cabecera">
+      <h2>${vista.titulo}</h2>
+      <button class="export-btn" onclick="exportarCSV()"
+        title="Descarga un CSV con los símbolos para importar como watchlist en TradingView">⬇ Exportar CSV para TradingView</button>
+    </div>
     <div class="info">${vista.total} coincidencias en total · mostrando ${filas.length}
     · ordenado por flujo institucional del sector/industria · pulsa cualquier
-    encabezado para reordenar · pulsa un ticker para abrir su gráfico en las dos
-    temporalidades del scan (una pestaña por marco; el chip abre solo el lento)</div>${nota}
+    encabezado para reordenar · pulsa un ticker para abrir su gráfico en TradingView</div>${nota}
     <div class="tabla-wrap"><table>
       <thead><tr>${ths}</tr></thead>
       <tbody>${cuerpo}</tbody>

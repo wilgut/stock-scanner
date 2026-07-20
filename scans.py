@@ -477,14 +477,7 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
         df['prob_flujo'] = None
 
     df = df.astype(object).where(df.notna(), None)
-    etiquetas = {
-        'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}',
-        # Intervalos del scan para abrir el gráfico de TradingView en la
-        # misma temporalidad: rápida (señal de entrada) y lenta (confirmación).
-        # Al pulsar un ticker se abre una pestaña con cada uno.
-        'intervalo_tv': TV_INTERVALO.get(fast, 'D'),
-        'intervalo_tv_slow': TV_INTERVALO.get(slow, 'D'),
-    }
+    etiquetas = {'rsi_fast': f'RSI {lbl_fast}', 'rsi_slow': f'RSI {lbl_slow}'}
     if nota:
         etiquetas['nota'] = nota
     return count, df.to_dict(orient='records'), etiquetas
