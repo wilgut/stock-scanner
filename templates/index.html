@@ -195,20 +195,21 @@ function fmtVol(v) {
 }
 function fmtNum(v, d) { return v == null ? '—' : Number(v).toFixed(d); }
 
-// Exporta los resultados mostrados a un CSV (carpeta de Descargas) con los
-// símbolos en formato EXCHANGE:SYMBOL, listos para importar como watchlist en
-// TradingView (menú de la watchlist → "Importar lista…").
+// Exporta los resultados mostrados a un archivo .txt (carpeta de Descargas)
+// con los símbolos en formato EXCHANGE:SYMBOL separados por coma. El cuadro
+// de importar de TradingView solo muestra archivos .txt, por eso se usa esa
+// extensión (watchlist → "Importar lista…").
 function exportarCSV() {
   if (!vista.filas || !vista.filas.length) return;
   const simbolos = vista.filas.map(r => r.ticker).filter(Boolean);
   const contenido = simbolos.join(',');
-  const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
   const fecha = new Date().toISOString().slice(0, 10);
   const slug = (vista.titulo || 'scan').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'scan';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${slug}-${fecha}.csv`;
+  a.download = `scanner-${slug}-${fecha}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -346,7 +347,7 @@ function render(scroll) {
   cont.innerHTML = `<div class="res-cabecera">
       <h2>${vista.titulo}</h2>
       <button class="export-btn" onclick="exportarCSV()"
-        title="Descarga un CSV con los símbolos para importar como watchlist en TradingView">⬇ Exportar CSV para TradingView</button>
+        title="Descarga un archivo .txt con los símbolos para importar como watchlist en TradingView">⬇ Exportar lista para TradingView</button>
     </div>
     <div class="info">${vista.total} coincidencias en total · mostrando ${filas.length}
     · ordenado por flujo institucional del sector/industria · pulsa cualquier
