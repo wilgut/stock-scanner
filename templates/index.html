@@ -63,6 +63,13 @@
   .scan-card .badge {
     font-size: 0.75rem; color: var(--muted); min-height: 1em;
   }
+  .opcion-scan label {
+    display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 4px;
+  }
+  .opcion-scan select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 7px 9px; font-size: 0.85rem; width: 100%;
+  }
   .badge.ok { color: var(--green); }
   .badge.vacio { color: var(--gold); }
   .badge.error { color: var(--red); }
@@ -175,6 +182,16 @@
     <div class="scan-card">
       <h3>{{ scan.nombre }}</h3>
       <p>{{ scan.descripcion }}</p>
+      {% if scan.opcion %}
+      <div class="opcion-scan">
+        <label for="opt-{{ scan_id }}">{{ scan.opcion.etiqueta }}</label>
+        <select id="opt-{{ scan_id }}">
+          {% for valor, etiqueta in scan.opcion.valores %}
+          <option value="{{ valor }}" {{ 'selected' if valor == scan.opcion.default else '' }}>{{ etiqueta }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <div class="badge" id="badge-{{ scan_id }}"></div>
       <button onclick="ejecutar('{{ scan_id }}', {{ 'true' if scan.multi_tf else 'false' }})"
               id="btn-{{ scan_id }}">Ejecutar scan</button>
@@ -232,6 +249,8 @@ async function ejecutar(scanId, multiTf) {
     p.set('modo', document.getElementById('modo').value);
     p.set('velas', document.getElementById('velas').value);
   }
+  const opt = document.getElementById('opt-' + scanId);
+  if (opt) p.set('opcion', opt.value);
   try {
     const r = await fetch(`/api/scan/${scanId}?` + p);
     const data = await r.json();

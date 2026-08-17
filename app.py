@@ -37,6 +37,9 @@ def api_scan(scan_id):
         min_mcap = float(request.args.get('min_mcap', 0))
         min_flujo = int(request.args.get('min_flujo', 0))
         velas = int(request.args.get('velas', 1))
+        # Selector propio de algunos scans (ej. margen sobre la media de 200).
+        opcion = request.args.get('opcion')
+        opcion = float(opcion) if opcion else None
     except ValueError:
         return jsonify({'error': 'Filtros inválidos'}), 400
     tf = request.args.get('tf', TF_DEFAULT)
@@ -44,7 +47,7 @@ def api_scan(scan_id):
     try:
         total, filas, etiquetas = run_scan(scan_id, min_price, min_volume,
                                            min_mcap, tf, min_flujo=min_flujo,
-                                           modo=modo, velas=velas)
+                                           modo=modo, velas=velas, opcion=opcion)
     except Exception:
         traceback.print_exc()
         return jsonify({'error': 'Error consultando TradingView. '

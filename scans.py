@@ -257,6 +257,45 @@ SCANS = {
         ],
         'orden': 'Perf.6M',
     },
+    'pullback_sma200': {
+        'nombre': 'Pullback a la media de 200',
+        'categoria': 'Institucionales',
+        'descripcion': 'El mismo retroceso que el anterior pero más profundo: la '
+                       'acción sigue en tendencia alcista (medias 50>200, '
+                       'rendimiento 6 meses > 15%) pero ya perdió la media de 50 '
+                       'y llega a tocar la de 200, el último gran soporte que '
+                       'vigilan los fondos. Exige que el precio esté como máximo '
+                       'un 5% por encima de esa media: no basta con haber perdido '
+                       'la de 50, tiene que estar apoyándose de verdad en la de '
+                       '200. Corrección mayor: mejor precio de entrada, pero más '
+                       'riesgo de que la tendencia se rompa. Ajusta abajo cuánto '
+                       'margen sobre la media de 200 aceptas.',
+        'condiciones': lambda: [
+            col('SMA50') > col('SMA200'),
+            col('close') > col('SMA200'),
+            col('close') < col('SMA50'),
+            col('Perf.6M') > 15,
+        ],
+        # El screener no admite aritmética entre columnas (close < SMA200*1.05
+        # lanza TypeError), así que la cercanía a la media de 200 se filtra aquí
+        # con pandas sobre las filas ya devueltas.
+        'columnas_extra': ['SMA200'],
+        'post_filtro': lambda df, pct: df[df['close'] <= df['SMA200'] * (1 + pct / 100)],
+        'opcion': {
+            'etiqueta': 'Margen sobre la media de 200',
+            'default': '5',
+            'valores': [
+                ('2', 'Hasta 2% (pegado a la media)'),
+                ('3', 'Hasta 3%'),
+                ('5', 'Hasta 5%'),
+                ('8', 'Hasta 8%'),
+                ('10', 'Hasta 10%'),
+                ('15', 'Hasta 15%'),
+                ('1000', 'Sin límite (solo perder la de 50)'),
+            ],
+        },
+        'orden': 'Perf.6M',
+    },
 }
 
 
@@ -401,7 +440,8 @@ def flujo_grupos():
 
 
 def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
-             tf=TF_DEFAULT, limit=60, min_flujo=0, modo='giro', velas=1):
+             tf=TF_DEFAULT, limit=60, min_flujo=0, modo='giro', velas=1,
+             opcion=None):
     """Ejecuta un scan y devuelve (total, filas, etiquetas RSI)."""
     scan = SCANS[scan_id]
     if modo not in ('giro', 'cruce'):
@@ -420,11 +460,18 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
     if min_mcap > 0:
         condiciones = [col('market_cap_basic') > min_mcap, *condiciones]
 
+    # Columnas que algunos scans necesitan solo para filtrar después en pandas
+    # (el screener no soporta aritmética entre columnas); no se muestran.
+    extra = [c for c in scan.get('columnas_extra', []) if c not in COLUMNS_BASE]
+    # Los scans que filtran después piden más filas de las que se muestran,
+    # porque parte de ellas caerán en ese segundo filtro.
+    amplia = (scan.get('verificar_giro') and modo == 'giro') or scan.get('post_filtro')
+
     rsi_fast, rsi_slow = f'RSI{fast}', f'RSI{slow}'
     q = (
         Query()
         .set_markets('america')
-        .select(*COLUMNS_BASE, rsi_fast, rsi_slow)
+        .select(*COLUMNS_BASE, rsi_fast, rsi_slow, *extra)
         .where2(And(
             col('type') == 'stock',
             col('typespecs').has('common'),
@@ -435,7 +482,7 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
             *condiciones,
         ))
         .order_by(scan['orden'], ascending=False)
-        .limit(200 if scan.get('verificar_giro') and modo == 'giro' else limit)
+        .limit(200 if amplia else limit)
     )
     count, df = _get_data(q)
     df = df.rename(columns={rsi_fast: 'rsi_fast', rsi_slow: 'rsi_slow'})
@@ -460,6 +507,17 @@ def run_scan(scan_id, min_price=5.0, min_volume=500_000, min_mcap=0,
                     ' y '.join(sin_verificar) + ' (datos históricos no '
                     'disponibles ahora): ese marco quedó en modo aproximado.')
         df = df.head(limit)
+
+    if scan.get('post_filtro') and len(df):
+        # Segundo filtro en pandas para condiciones que el screener no expresa.
+        # El valor lo elige el usuario en el selector de la tarjeta del scan.
+        if opcion is None:
+            opcion = float(scan['opcion']['default'])
+        df = scan['post_filtro'](df, opcion)
+        count = len(df)
+        df = df.head(limit)
+    if extra:
+        df = df.drop(columns=[c for c in extra if c in df.columns])
 
     # Probabilidad de flujo institucional: 40% percentil del sector +
     # 60% percentil de la industria (más específica). Si la consulta de
