@@ -7,7 +7,9 @@ Web app de scans de stock picking con datos del screener de TradingView
 (NYSE, NASDAQ, AMEX). Incluye scans propios de doble marco temporal
 (MACD y RSI diario + semanal) y scans institucionales clásicos
 (Minervini, CANSLIM, Golden Cross, ruptura de 52 semanas, volumen inusual,
-gap alcista, rebote sobrevendido, pullback a la SMA 50).
+gap alcista, rebote sobrevendido, pullback a la SMA 50 y pullback a la
+SMA 200 — este último con el margen sobre la media configurable en la
+propia tarjeta del scan).
 
 ## Uso local con tiempo real (PC, Mac, temporalidades bajas)
 
